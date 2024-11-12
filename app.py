@@ -196,12 +196,6 @@ def google_logged_in(blueprint, token):
         db.session.add(user)
         db.session.commit()
 
-    # Check if the user has a TOTP secret; if not, generate one
-    if not user.totp_secret:
-        user.totp_secret = pyotp.random_base32()  # Generate a TOTP secret
-        db.session.commit()
-        return redirect(url_for("show_qr_code"))  # Redirect to QR code setup page
-
     # Store additional user info in OAuthUserData table if necessary
     user_data = OAuthUserData.query.get(user_id)
     if user_data is None:
@@ -218,10 +212,13 @@ def google_logged_in(blueprint, token):
     # Log the user in after TOTP is set up
     login_user(user)
     flash("Successfully signed in with Google!", "success")
+    # Check if the user has a TOTP secret; if not, generate one
+    if not user.totp_secret:
+        user.totp_secret = pyotp.random_base32()  # Generate a TOTP secret
+        db.session.commit()
+        return redirect(url_for("show_qr_code"))  # Redirect to QR code setup page
     return redirect(url_for("home"))
-
-        
-
+   
 @app.route("/logout")
 def logout():
     token = google_bp.token["access_token"]

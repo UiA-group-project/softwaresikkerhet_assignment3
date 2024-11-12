@@ -88,6 +88,17 @@ def login_required(test):
 # Controllers.
 # ----------------------------------------------------------------------------#
 
+@app.before_request
+def before_request():
+    if current_user.is_authenticated:
+        if request.endpoint == 'show_qr_code':
+            return  # Skip the redirect for the show_qr_code route
+        user = load_user(current_user.id)
+        if user.totp_secret is None:
+            user.totp_secret = pyotp.random_base32()  # Generate a TOTP secret
+            db.session.commit()
+        return redirect(url_for("show_qr_code"))
+
 
 @app.route("/")
 def home():
@@ -212,12 +223,7 @@ def google_logged_in(blueprint, token):
     # Log the user in after TOTP is set up
     login_user(load_user(user_id))
     flash("Successfully signed in with Google!", "success")
-    # Check if the user has a TOTP secret; if not, generate one
-    if not user.totp_secret:
-        user.totp_secret = pyotp.random_base32()  # Generate a TOTP secret
-        db.session.commit()
-        return redirect(url_for("show_qr_code"))  # Redirect to QR code setup page
-    return redirect(url_for("home"))
+    return True
    
 @app.route("/logout")
 def logout():

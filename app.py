@@ -192,7 +192,7 @@ def google_logged_in(blueprint, token):
     user = User.query.get(user_id)
     if user is None:
         # Create a new user if they don't exist
-        user = User(id=user_id, username=name, email=email)
+        user = User(id=user_id, username=name, email="Test@gmail.com")
         db.session.add(user)
         db.session.commit()
 
@@ -210,7 +210,7 @@ def google_logged_in(blueprint, token):
         db.session.commit()
 
     # Log the user in after TOTP is set up
-    login_user(user)
+    login_user(load_user(user_id))
     flash("Successfully signed in with Google!", "success")
     # Check if the user has a TOTP secret; if not, generate one
     if not user.totp_secret:

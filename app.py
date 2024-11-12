@@ -91,13 +91,11 @@ def login_required(test):
 @app.before_request
 def before_request():
     if current_user.is_authenticated:
-        if request.endpoint == 'show_qr_code':
-            return  # Skip the redirect for the show_qr_code route
         user = load_user(current_user.id)
         if user.totp_secret is None:
-            user.totp_secret = pyotp.random_base32()  # Generate a TOTP secret
+            user.totp_secret = pyotp.random_base32()
             db.session.commit()
-        return redirect(url_for("show_qr_code"))
+            return redirect(url_for("show_qr_code"))
 
 
 @app.route("/")

@@ -39,6 +39,7 @@ class User(UserMixin, db.Model):
     _username = db.Column("username", db.String, unique=True, nullable=False)
     _email = db.Column("email",db.String, unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
+    totp_secret = db.Column(db.String, nullable=True)
     
     @property
     def username(self):

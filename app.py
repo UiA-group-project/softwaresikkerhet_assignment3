@@ -2,7 +2,12 @@
 # ----------------------------------------------------------------------------#
 # Imports
 # ----------------------------------------------------------------------------#
-
+import base64
+import pyotp          # For generating TOTP-based 2FA codes
+import qrcode         # For creating the QR code
+from io import BytesIO  # To handle QR code image in memory for sending it directly to the user
+from flask import send_file  # To send the QR code image to the user
+from flask_login import current_user  # To access the logged-in user
 from flask import Flask, render_template, request, make_response, redirect, url_for, url_for, flash
 from flask_dance.contrib.google import make_google_blueprint, google
 from flask_dance.consumer import oauth_authorized
@@ -128,6 +133,21 @@ def secureblog():
     response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self';"
     return response
 
+@app.route("/show_qr_code")
+@login_required
+def show_qr_code():
+    user = load_user(current_user.id)  # Retrieve the current logged-in user
+    totp = pyotp.TOTP(user.totp_secret)
+    uri = totp.provisioning_uri(name=user.username, issuer_name="YourAppName")
+
+    # Generate QR code and store it as a base64 string to embed in HTML
+    img = qrcode.make(uri)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    qr_code_data = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    return render_template("layouts/show_qr_code.html", qr_code_data=qr_code_data)
+
 @app.route("/oauth/google")
 def google_login():
     if not google.authorized: # Check if user is signed in with Google
@@ -135,6 +155,21 @@ def google_login():
     else:
         flash("You are already signed in with Google!", "info")
         return redirect(url_for("home"))
+    
+@app.route("/verify_2fa", methods=["POST"])
+@login_required
+def verify_2fa():
+    user = load_user(current_user.id)
+    totp = pyotp.TOTP(user.totp_secret)
+    code = request.form.get("2fa_code")
+
+    if totp.verify(code):
+        flash("2FA verification successful!", "success")
+        return redirect(url_for("home"))
+    else:
+        flash("Invalid 2FA code. Please try again.", "error")
+        return redirect(url_for("show_qr_code"))
+
 
 @oauth_authorized.connect_via(google_bp)
 def google_logged_in(blueprint, token):
@@ -148,11 +183,26 @@ def google_logged_in(blueprint, token):
     # Extract fields
     user_id = user_info.get("id")
     name = user_info.get("name")
+    email = "Test@gmail.com"
     given_name = user_info.get("given_name")
     family_name = user_info.get("family_name")
     picture = user_info.get("picture")
 
-    # Store user info in OAuthUserData table if new
+    # Check if user exists in the database
+    user = User.query.get(user_id)
+    if user is None:
+        # Create a new user if they don't exist
+        user = User(id=user_id, username=name, email=email)
+        db.session.add(user)
+        db.session.commit()
+
+    # Check if the user has a TOTP secret; if not, generate one
+    if not user.totp_secret:
+        user.totp_secret = pyotp.random_base32()  # Generate a TOTP secret
+        db.session.commit()
+        return redirect(url_for("show_qr_code"))  # Redirect to QR code setup page
+
+    # Store additional user info in OAuthUserData table if necessary
     user_data = OAuthUserData.query.get(user_id)
     if user_data is None:
         user_data = OAuthUserData(
@@ -164,16 +214,11 @@ def google_logged_in(blueprint, token):
         )
         db.session.add(user_data)
         db.session.commit()
-        
-    user = User.query.get(user_id)
-    if user is None:
-        user = User(id=user_id, username=name, email="hanusatv@gmail.com")
-        db.session.add(user)
-        db.session.commit()
 
-    login_user(load_user(user_id))
+    # Log the user in after TOTP is set up
+    login_user(user)
     flash("Successfully signed in with Google!", "success")
-    return True  # Ensure to return True to signal Flask-Dance
+    return redirect(url_for("home"))
 
         
 

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Two-Factor Authentication Setup</title>
+</head>
+<body>
+    <h1>Two-Factor Authentication Setup</h1>
+    <p>Scan this QR code with your Google Authenticator app to enable two-factor authentication.</p>
+    
+    <!-- Display the QR code as an embedded image -->
+    <img src="data:image/png;base64,{{ qr_code_data }}" alt="QR Code for 2FA">
+
+    <p>Once you've scanned the code, enter the code from your authenticator app below to complete the setup.</p>
+    <form action="{{ url_for('verify_2fa') }}" method="post">
+        <label for="2fa_code">Enter Code from Authenticator App:</label>
+        <input type="text" name="2fa_code" id="2fa_code" required>
+        <button type="submit">Verify</button>
+    </form>
+</body>
+</html>
